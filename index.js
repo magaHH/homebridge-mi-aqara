@@ -26,9 +26,10 @@ const serverAqaraLANProtocolMulticastAddress = '224.0.0.50';
 const serverAqaraLANProtocolMulticastPort = 4321;
 const serverAqaraLANProtocolServerPort = 9898;
 
-var PlatformAccessory, Accessory, Service, Characteristic, UUIDGen;
+var PlatformAccessory, Accessory, Service, Characteristic, UUIDGen, FakeGatoHistoryService;
 
 module.exports = function(homebridge) {
+	FakeGatoHistoryService = require('fakegato-history')(homebridge)
     PlatformAccessory = homebridge.platformAccessory;
     Accessory = homebridge.hap.Accessory;
     Service = homebridge.hap.Service;
@@ -49,6 +50,7 @@ function MiAqaraPlatform(log, config, api) {
     this.Service = Service;
     this.Characteristic = Characteristic;
     this.UUIDGen = UUIDGen;
+	this.HBpath = api.user.storagePath()+'/accessories';
     
     this.api = api;
     this.log = new LogUtil(null, log);
@@ -82,12 +84,34 @@ function MiAqaraPlatform(log, config, api) {
 MiAqaraPlatform.prototype.configureAccessory = function(accessory) {
     var that = this;
     
-    accessory.reachable = true;
+	//Maybe needs to commented in again
+    //accessory.reachable = true;
     accessory.on('identify', function(paired, callback) {
         that.log.debug(accessory.displayName + " Identify!!!");
     });
 
     if(that.AccessoryUtil) {
+		if(accessory.displayName.match('TemperatureAndHumiditySensor')){
+          //SerialNumber must be unique, lets check for old SerialNumber
+          let oldSerial = accessory.getService(Service.AccessoryInformation).getCharacteristic(Characteristic.SerialNumber).value;
+          if(!oldSerial.match('-')&&accessory.displayName.match('_TemperatureSensor_')){
+            oldSerial = oldSerial + '-T'
+          } else if(!oldSerial.match('-')&&accessory.displayName.match('_HumiditySensor_')){
+            oldSerial = oldSerial + '-H'
+          }
+          accessory.getService(Service.AccessoryInformation).setCharacteristic(Characteristic.SerialNumber, oldSerial);
+          accessory.context.loggingService = new FakeGatoHistoryService("weather",accessory,{storage:'fs',path:that.HBpath, disableTimer: false});
+          accessory.context.loggingService.log = that.log.log;
+          accessory.context.loggingService.subtype = oldSerial;
+        } else if(accessory.displayName.match('MotionSensor')){
+          accessory.context.loggingService = new FakeGatoHistoryService("motion",accessory,{storage:'fs',path:that.HBpath, disableTimer: false});
+          accessory.context.loggingService.log = that.log.log;
+          accessory.context.loggingService.subtype = accessory.getService(Service.AccessoryInformation).getCharacteristic(Characteristic.SerialNumber).value;
+        } else if(accessory.displayName.match('ContactSensor')){
+          accessory.context.loggingService = new FakeGatoHistoryService("door",accessory,{storage:'fs',path:that.HBpath, disableTimer: false});
+          accessory.context.loggingService.log = that.log.log;
+          accessory.context.loggingService.subtype = accessory.getService(Service.AccessoryInformation).getCharacteristic(Characteristic.SerialNumber).value;
+        }
         that.AccessoryUtil.add(accessory);
     }
 }
@@ -768,6 +792,16 @@ MiAqaraPlatform.prototype.registerPlatformAccessories = function(accessories) {
     that.api.registerPlatformAccessories("homebridge-mi-aqara", "MiAqaraPlatform", accessories);
     accessories.forEach(function(accessory, index, arr) {
         that.log.info("create accessory - UUID: " + accessory.UUID);
+		 if(accessory.displayName.match('TemperatureAndHumiditySensor')){
+            accessory.context.loggingService = new FakeGatoHistoryService("weather",accessory,{storage:'fs',path:that.HBpath, disableTimer: false});
+            accessory.context.loggingService.log = that.log.log;
+        } else if(accessory.displayName.match('MotionSensor')){
+            accessory.context.loggingService = new FakeGatoHistoryService("motion",accessory,{storage:'fs',path:that.HBpath, disableTimer: false});
+            accessory.context.loggingService.log = that.log.log;
+        } else if(accessory.displayName.match('ContactSensor')){
+            accessory.context.loggingService = new FakeGatoHistoryService("door",accessory,{storage:'fs',path:that.HBpath, disableTimer: false});
+            accessory.context.loggingService.log = that.log.log;
+        }
         that.AccessoryUtil.add(accessory);
     });
 }

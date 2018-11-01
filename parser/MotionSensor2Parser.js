@@ -1,9 +1,32 @@
 const DeviceParser = require('./DeviceParser');
 const AccessoryParser = require('./AccessoryParser');
+const moment = require('moment');
+const inherits = require('util').inherits;
+
+var Accessory, Service, Characteristic, PlatformAccessory;
 
 class MotionSensor2Parser extends DeviceParser {
     constructor(platform) {
         super(platform);
+		PlatformAccessory = platform.PlatformAccessory;
+        Accessory = platform.Accessory;
+        Service = platform.Service;
+        Characteristic = platform.Characteristic;
+        
+       /// /////////////////////////////////////////////////////////////////////////
+       // LastActivation Characteristic
+       /// ///////////////////////////////////////////////////////////////////////// 
+       Characteristic.LastActivation = function() {
+         Characteristic.call(this, 'Last Activation', 'E863F11A-079E-48FF-8F27-9C2605A29F52');
+         this.setProps({
+           format: Characteristic.Formats.UINT32,
+           unit: Characteristic.Units.SECONDS,
+           perms: [Characteristic.Perms.READ, Characteristic.Perms.NOTIFY]
+         });
+         this.value = this.getDefaultValue();
+       };
+       inherits(Characteristic.LastActivation, Characteristic);
+       Characteristic.LastActivation.UUID = 'E863F11A-079E-48FF-8F27-9C2605A29F52';  
     }
     
     getAccessoriesParserInfo() {
@@ -38,6 +61,8 @@ class MotionSensor2MotionSensorParser extends AccessoryParser {
         var result = [];
         
         var service = new that.Service.MotionSensor(accessoryName);
+		service.addCharacteristic(that.Characteristic.LastActivation);
+        service.getCharacteristic(that.Characteristic.LastActivation);
         service.getCharacteristic(that.Characteristic.MotionDetected);
         result.push(service);
         
@@ -57,10 +82,31 @@ class MotionSensor2MotionSensorParser extends AccessoryParser {
         var accessory = that.platform.AccessoryUtil.getByUUID(uuid);
         if(accessory) {
             var service = accessory.getService(that.Service.MotionSensor);
+			if(!service.testCharacteristic(that.Characteristic.LastActivation))service.addCharacteristic(that.Characteristic.LastActivation);
+            service.getCharacteristic(that.Characteristic.LastActivation);
             var motionDetectedCharacteristic = service.getCharacteristic(that.Characteristic.MotionDetected);
             var value = that.getMotionDetectedCharacteristicValue(jsonObj, null);
             if(null != value) {
-                motionDetectedCharacteristic.updateValue(value);
+				let totallength = accessory.context.loggingService.history.length - 1; 
+                let latestTime = accessory.context.loggingService.history[totallength].time;
+                let latestStatus = accessory.context.loggingService.history[totallength].status;
+                let lastActivation = 0;
+                let motionDetected = 0;
+                if(value){
+                  motionDetected = 1;
+                  lastActivation = moment().unix();
+                } else {
+                  motionDetected = 0;
+                  lastActivation = latestTime - accessory.context.loggingService.getInitialTime();
+                }
+                service.getCharacteristic(that.Characteristic.LastActivation).updateValue(lastActivation);
+				motionDetectedCharacteristic.updateValue(value);
+				if(motionDetected != latestStatus){
+                  accessory.context.loggingService.addEntry({
+                    time: moment().unix(),
+                    status: motionDetected
+                  });
+                }
             }
             
             if(that.platform.ConfigUtil.getAccessorySyncValue(deviceSid, that.accessoryType)) {

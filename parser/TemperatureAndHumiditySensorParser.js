@@ -1,5 +1,6 @@
 const DeviceParser = require('./DeviceParser');
 const AccessoryParser = require('./AccessoryParser');
+const moment = require('moment');
 
 class TemperatureAndHumiditySensorParser extends DeviceParser {
     constructor(platform) {
@@ -29,7 +30,7 @@ class TemperatureAndHumiditySensorTemperatureSensorParser extends AccessoryParse
         return {
             'Manufacturer': 'Aqara',
             'Model': 'Temperature And Humidity Sensor',
-            'SerialNumber': deviceSid
+            'SerialNumber': deviceSid + '-T'
         };
     }
 
@@ -65,6 +66,12 @@ class TemperatureAndHumiditySensorTemperatureSensorParser extends AccessoryParse
             var value = that.getCurrentTemperatureCharacteristicValue(jsonObj, null);
             if(null != value) {
                 currentTemperatureCharacteristic.updateValue(value);
+				accessory.context.loggingService.addEntry({
+                  time: moment().unix(),
+                  temp: value,
+                  pressure: 0,
+                  humidity: 0
+                });
             }
             
             if(that.platform.ConfigUtil.getAccessorySyncValue(deviceSid, that.accessoryType)) {
@@ -109,7 +116,7 @@ class TemperatureAndHumiditySensorHumiditySensorParser extends AccessoryParser {
         return {
             'Manufacturer': 'Aqara',
             'Model': 'Temperature And Humidity Sensor',
-            'SerialNumber': deviceSid
+            'SerialNumber': deviceSid + '-H'
         };
     }
 
@@ -141,6 +148,12 @@ class TemperatureAndHumiditySensorHumiditySensorParser extends AccessoryParser {
             var value = that.getCurrentRelativeHumidityCharacteristicValue(jsonObj, null);
             if(null != value) {
                 currentRelativeHumidityCharacteristic.updateValue(value);
+				accessory.context.loggingService.addEntry({
+                  time: moment().unix(),
+                  temp: 0,
+                  pressure: 0,
+                  humidity: value
+                });
             }
             
             if(that.platform.ConfigUtil.getAccessorySyncValue(deviceSid, that.accessoryType)) {
